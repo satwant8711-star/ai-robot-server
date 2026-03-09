@@ -1,5 +1,7 @@
 from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
+from gtts import gTTS
+from fastapi.responses import FileResponse
 import requests
 import os
 
@@ -81,3 +83,12 @@ async def transcribe(file: UploadFile = File(...)):
 @app.get("/")
 def home():
     return {"message": "AI Robot Server Running"}
+@app.post("/speak")
+def speak(text: str):
+
+    tts = gTTS(text=text, lang="en")
+
+    filename = "response.mp3"
+    tts.save(filename)
+
+    return FileResponse(filename, media_type="audio/mpeg")
