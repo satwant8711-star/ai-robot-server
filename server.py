@@ -4,7 +4,6 @@ import os
 
 app = FastAPI()
 
-# Get Bytez API key from Render environment variable
 BYTEZ_API_KEY = os.getenv("BYTEZ_API_KEY")
 
 
@@ -20,7 +19,7 @@ def home():
 async def speech_to_text(file: UploadFile = File(...)):
 
     if not BYTEZ_API_KEY:
-        return {"error": "BYTEZ_API_KEY environment variable not set"}
+        return {"error": "BYTEZ_API_KEY not set"}
 
     audio_data = await file.read()
 
@@ -37,10 +36,19 @@ async def speech_to_text(file: UploadFile = File(...)):
         response = requests.post(
             "https://api.bytez.ai/v1/audio/transcriptions",
             headers=headers,
-            files=files
+            files=files,
+            timeout=60
         )
 
         return response.json()
 
     except Exception as e:
         return {"error": str(e)}
+
+
+
+
+
+
+
+
