@@ -1,60 +1,24 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, UploadFile, File
+from pydantic import BaseModel
 import requests
 import os
 
 app = FastAPI()
 
-# Get API key from environment variable
+# GROQ API
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+WHISPER_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 
 
-@app.get("/")
-def home():
-    return {
-        "status": "running",
-        "message": "AI Robot Server Running Successfully"
-    }
+# -------- Chat Request Model --------
+class ChatRequest(BaseModel):
+    message: str
 
 
-@app.post("/stt")
-async def speech_to_text(file: UploadFile = File(...)):
-
-    if not GROQ_API_KEY:
-        return {"error": "GROQ_API_KEY not set"}
-
-    try:
-        audio_data = await file.read()
-
-        headers = {
-            "Authorization": f"Bearer {GROQ_API_KEY}"
-        }
-
-        files = {
-            "file": ("audio.wav", audio_data, "audio/wav"),
-            "model": (None, "whisper-large-v3")
-        }
-
-        response = requests.post(
-            "https://api.groq.com/openai/v1/audio/transcriptions",
-            headers=headers,
-            files=files,
-            timeout=60
-        )
-
-        print(response.text)
-
-        try:
-            return response.json()
-        except:
-            return {
-                "status_code": response.status_code,
-                "response_text": response.text
-            }
-
-    except Exception as e:
-        return {"error": str(e)}
+# -------- AI Chat Endpoint --------
 @app.post("/chat")
-async def chat_with_ai(message: str):
+def chat(request: ChatRequest):
 
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -64,14 +28,56 @@ async def chat_with_ai(message: str):
     data = {
         "model": "llama3-70b-8192",
         "messages": [
-            {"role": "user", "content": message}
+            {"role": "user", "content": request.message}
         ]
     }
 
-    response = requests.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        headers=headers,
-        json=data
-    )
+    try:
+        response = requests.post(GROQ_URL, headers=headers, json=data)
 
-    return response.json()
+        return {
+            "status_code": response.status_code,
+            "response": response.json()
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# -------- Speech to Text Endpoint --------
+@app.post("/transcribe")
+async def transcribe(file: UploadFile = File(...)):
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}"
+    }
+
+    files = {
+        "file": (file.filename, await file.read(), "audio/wav")
+    }
+
+    data = {
+        "model": "whisper-large-v3"
+    }
+
+    try:
+        response = requests.post(
+            WHISPER_URL,
+            headers=headers,
+            files=files,
+            data=data
+        )
+
+        return {
+            "status_code": response.status_code,
+            "response": response.json()
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# -------- Root Endpoint --------
+@app.get("/")
+def home():
+    return {"message": "AI Robot Server Running"}
