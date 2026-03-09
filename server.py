@@ -1,94 +1,69 @@
 from fastapi import FastAPI, UploadFile, File
-from pydantic import BaseModel
-from gtts import gTTS
 from fastapi.responses import FileResponse
 import requests
 import os
+from gtts import gTTS
 
 app = FastAPI()
 
-# GROQ API
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-WHISPER_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+
+STT_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
-# -------- Chat Request Model --------
-class ChatRequest(BaseModel):
-    message: str
-
-
-# -------- AI Chat Endpoint --------
-@app.post("/chat")
-def chat(request: ChatRequest):
-
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    data = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [
-            {"role": "user", "content": request.message}
-        ]
-    }
-
-    try:
-        response = requests.post(GROQ_URL, headers=headers, json=data)
-
-        return {
-            "status_code": response.status_code,
-            "response": response.json()
-        }
-
-    except Exception as e:
-        return {"error": str(e)}
-
-
-# -------- Speech to Text Endpoint --------
-@app.post("/transcribe")
-async def transcribe(file: UploadFile = File(...)):
+@app.post("/robot")
+async def robot(file: UploadFile = File(...)):
 
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}"
     }
 
-    files = {
-        "file": (file.filename, await file.read(), "audio/wav")
+    # -------- Speech to Text --------
+    audio_data = await file.read()
+
+    stt_files = {
+        "file": ("audio.wav", audio_data, "audio/wav")
     }
 
-    data = {
+    stt_data = {
         "model": "whisper-large-v3"
     }
 
-    try:
-        response = requests.post(
-            WHISPER_URL,
-            headers=headers,
-            files=files,
-            data=data
-        )
+    stt_response = requests.post(
+        STT_URL,
+        headers=headers,
+        files=stt_files,
+        data=stt_data
+    )
 
-        return {
-            "status_code": response.status_code,
-            "response": response.json()
-        }
+    text = stt_response.json()["text"]
 
-    except Exception as e:
-        return {"error": str(e)}
+    # -------- AI Chat --------
+    chat_headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
 
+    chat_data = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
+            {"role": "user", "content": text}
+        ]
+    }
 
-# -------- Root Endpoint --------
-@app.get("/")
-def home():
-    return {"message": "AI Robot Server Running"}
-@app.post("/speak")
-def speak(text: str):
+    chat_response = requests.post(
+        CHAT_URL,
+        headers=chat_headers,
+        json=chat_data
+    )
 
-    tts = gTTS(text=text, lang="en")
+    ai_reply = chat_response.json()["choices"][0]["message"]["content"]
 
-    filename = "response.mp3"
+    # -------- Text to Speech --------
+    tts = gTTS(text=ai_reply, lang="en")
+
+    filename = "reply.mp3"
     tts.save(filename)
 
     return FileResponse(filename, media_type="audio/mpeg")
