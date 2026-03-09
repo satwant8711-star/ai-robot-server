@@ -53,3 +53,25 @@ async def speech_to_text(file: UploadFile = File(...)):
 
     except Exception as e:
         return {"error": str(e)}
+@app.post("/chat")
+async def chat_with_ai(message: str):
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "model": "llama3-70b-8192",
+        "messages": [
+            {"role": "user", "content": message}
+        ]
+    }
+
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers=headers,
+        json=data
+    )
+
+    return response.json()
